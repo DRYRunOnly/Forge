@@ -34,7 +34,7 @@ Forge provides a single, consistent interface for managing packages across multi
 
 ```
 ┌─────────────────────┐
-│   CPM CLI Core      │
+│   Forge CLI Core      │
 ├─────────────────────┤
 │  Command Parser     │
 │  Config Manager     │
@@ -97,6 +97,19 @@ Forge provides a single, consistent interface for managing packages across multi
 ## Getting Started
 
 ### Installation
+
+#### Install from Cloudsmith (Recommended)
+
+```bash
+# Install globally from Cloudsmith
+npm install -g --registry=https://npm.cloudsmith.io/ranjantestenv/forge/ forge
+
+# Or configure the registry permanently
+npm config set registry https://npm.cloudsmith.io/ranjantestenv/forge/
+npm install -g forge
+```
+
+#### Install from Source
 
 ```bash
 # Clone the repository
@@ -176,6 +189,25 @@ This project is in active development. Both node and python plugins are function
 ## Contributing
 
 We welcome contributions! Please read our contributing guidelines before submitting PRs.
+
+## Hosting
+
+This project is hosted on [Cloudsmith](https://cloudsmith.com) as part of their Open Source hosting program.
+
+[![Hosted By: Cloudsmith](https://img.shields.io/badge/OSS%20hosting%20by-cloudsmith-blue?logo=cloudsmith&style=flat-square)](https://cloudsmith.com)
+
+Package repository: [https://broadcasts.cloudsmith.com/ranjantestenv/forge/](https://broadcasts.cloudsmith.com/ranjantestenv/forge/)
+
+### Installing from Cloudsmith
+
+```bash
+# Install from Cloudsmith registry
+npm install -g --registry=https://npm.cloudsmith.io/rajantestenv/forge/ forge
+
+# Or configure the registry for the scope
+npm config set @forge:registry https://npm.cloudsmith.io/ranjantestenv/forge/
+npm install -g @forge/forge
+```
 
 ## License
 

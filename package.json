@@ -13,7 +13,12 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "lint": "eslint src/**/*.ts",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build:prod && npm test",
+    "publish:cloudsmith": "npm publish --registry=https://npm.cloudsmith.io/ranjantestenv/forge/",
+    "version:patch": "npm version patch && npm run publish:cloudsmith",
+    "version:minor": "npm version minor && npm run publish:cloudsmith",
+    "version:major": "npm version major && npm run publish:cloudsmith"
   },
   "keywords": [
     "package-manager",
@@ -26,6 +31,14 @@
   ],
   "author": "Forge Team",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DRYRunOnly/Forge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DRYRunOnly/Forge/issues"
+  },
+  "homepage": "https://github.com/DRYRunOnly/Forgee#readme",
   "dependencies": {
     "axios": "^1.2.0",
     "chalk": "^4.1.2",
