@@ -149,7 +149,7 @@ export class NodePlugin implements PackagePlugin {
     packages: ResolvedPackage[],
     context: CommandContext
   ): Promise<string[]> {
-    const cacheDir = path.join(context.config.cache.directory, 'npm');
+    const cacheDir = path.join(context.config.cache.directory, 'node');
     await fs.ensureDir(cacheDir);
 
     const downloadPromises = packages.map(async (pkg) => {

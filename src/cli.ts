@@ -71,9 +71,9 @@ async function main() {
             console.log('Available actions: clear, info');
             console.log('Available formats: node, python, maven (optional)');
             console.log('Examples:');
-            console.log('  forge cache clear npm     # Clear only npm cache');
+            console.log('  forge cache clear node    # Clear only node cache');
             console.log('  forge cache clear         # Clear all caches');
-            console.log('  forge cache info npm      # Show npm cache info');
+            console.log('  forge cache info node     # Show node cache info');
             console.log('  forge cache info          # Show all cache info');
             process.exit(1);
         }
@@ -101,7 +101,7 @@ Examples:
   forge config get pluginPriority
   forge config list
   forge config set cache.maxSize 2GB
-  forge config set-priority "pip,npm,maven"`)
+  forge config set-priority "python,node,maven"`)
     .action(async (action: string, key?: string, value?: string) => {
       try {
         switch (action) {
@@ -130,7 +130,7 @@ Examples:
           case 'set-priority':
             if (!key) {
               console.error(chalk.red('Plugin priority is required for set-priority action'));
-              console.error(chalk.yellow('Example: forge config set-priority "pip,npm,maven"'));
+              console.error(chalk.yellow('Example: forge config set-priority "python,node,maven"'));
               process.exit(1);
             }
             const priority = key.split(',').map(p => p.trim());
@@ -155,7 +155,7 @@ Examples:
             console.log('Examples:');
             console.log('  forge config get pluginPriority');
             console.log('  forge config set cache.maxSize 2GB');
-            console.log('  forge config set-priority "pip,npm,maven"');
+            console.log('  forge config set-priority "python,node,maven"');
             console.log('  forge config list');
             process.exit(1);
         }
@@ -346,7 +346,7 @@ Examples:
     .description('Remove packages')
     .argument('<packages...>', 'Packages to remove')
     .option('--dry-run', 'Show what would be removed without actually removing')
-    .option('-f, --format <format>', 'Force specific format (npm, pip) instead of auto-detection')
+    .option('-f, --format <format>', 'Force specific format (node, python) instead of auto-detection')
     .option('-v, --verbose', 'Enable verbose logging')
     .action(async (packages: string[], options) => {
       try {
@@ -412,7 +412,7 @@ Examples:
     .description('Update packages')
     .argument('[packages...]', 'Packages to update (updates all if none specified)')
     .option('--dry-run', 'Show what would be updated without actually updating')
-    .option('-f, --format <format>', 'Force specific format (npm, pip) instead of auto-detection')
+    .option('-f, --format <format>', 'Force specific format (node, python) instead of auto-detection')
     .option('-v, --verbose', 'Enable verbose logging')
     .action(async (packages: string[], options) => {
       try {

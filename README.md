@@ -1,3 +1,5 @@
+[![Hosted By: Cloudsmith](https://img.shields.io/badge/OSS%20hosting%20by-cloudsmith-blue?logo=cloudsmith&style=flat-square)](https://cloudsmith.com)
+
 ![Forge Banner](images/banner.png)
 
 # Forge
@@ -188,7 +190,32 @@ This project is in active development. Both node and python plugins are function
 
 ## Contributing
 
-We welcome contributions! Please read our contributing guidelines before submitting PRs.
+We welcome contributions! Please see our contribution guidelines:
+
+- 📋 [Contributing Guide](CONTRIBUTING.md) - Development setup, coding standards, and contribution process
+- 👥 [Maintainers](MAINTAINERS.md) - Project maintainers and contact information
+- 🔒 [Security Policy](SECURITY.md) - Reporting security vulnerabilities
+- 📝 [Changelog](CHANGELOG.md) - Project history and release notes
+
+### Quick Start for Contributors
+
+```bash
+# Fork and clone the repository
+git clone https://github.com/DryRunOnly/Forge.git
+cd forge
+
+# Install dependencies and build
+npm install
+npm run build
+
+# Run tests
+npm test
+
+# Start developing
+npm run dev
+```
+
+For detailed information, please read our [Contributing Guide](CONTRIBUTING.md).
 
 ## Hosting
 
@@ -211,4 +238,4 @@ npm install -g @forge/forge
 
 ## License
 
-[License to be determined]
+This project is licensed under the [MIT License](LICENSE).

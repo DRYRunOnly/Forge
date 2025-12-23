@@ -337,7 +337,7 @@ export class PythonPlugin implements PackagePlugin {
   }
 
   async downloadPackages(packages: ResolvedPackage[], context: CommandContext): Promise<string[]> {
-    const cacheDir = path.join(context.config.cache.directory, 'pip');
+    const cacheDir = path.join(context.config.cache.directory, 'python');
     await fs.ensureDir(cacheDir);
     
     this.logger.verbose(`Downloading ${packages.length} packages...`);
