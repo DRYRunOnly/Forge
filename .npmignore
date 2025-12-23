@@ -1,0 +1,32 @@
+# Source files - we only want the compiled dist/
+src/
+src/__tests__/
+src/__mocks__/
+
+# Documentation (not needed in package - except README)
+docs/
+images/
+examples/
+test-*/
+DEVELOPMENT.md
+
+# Development files
+.eslintrc.js
+jest.config.js
+tsconfig.json
+
+# Build artifacts we don't want (keep .d.ts but remove .map files)
+*.map
+*.tsbuildinfo
+
+# Version control
+.git/
+.gitignore
+
+# Dependencies
+node_modules/
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
