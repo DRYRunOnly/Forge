@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+  <metadata>
+    <id>forge</id>
+    <version>0.1.0</version>
+    <title>Forge - Universal Package Manager</title>
+    <authors>Ranjan Singh</authors>
+    <owners>ranjantestenv</owners>
+    <projectUrl>https://github.com/DRYRunOnly/Forge</projectUrl>
+    <license type="expression">MIT</license>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>Forge is a universal package manager that provides a single, unified interface for managing packages across multiple ecosystems including Node.js (npm), Python (pip), and more.</description>
+    <summary>Universal package manager for Node.js, Python, and more</summary>
+    <releaseNotes>Initial release with Node.js and Python support.</releaseNotes>
+    <tags>universal-package-manager package-manager cli</tags>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>

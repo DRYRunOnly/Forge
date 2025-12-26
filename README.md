@@ -100,29 +100,73 @@ Forge provides a single, consistent interface for managing packages across multi
 
 ### Installation
 
-#### Install from Cloudsmith (Recommended)
+#### Release Artifacts
+
+Each release includes the following artifacts:
+
+| File | Platform | Description |
+|------|----------|-------------|
+| `forge-macos-x64` | macOS Intel | Standalone binary for Intel Macs |
+| `forge-macos-arm64` | macOS Apple Silicon | Standalone binary for M1/M2/M3 Macs |
+| `forge-linux-x64` | Linux x64 | Standalone binary for Linux |
+| `forge-linux-arm64` | Linux ARM64 | Standalone binary for Linux ARM (Raspberry Pi, etc.) |
+| `forge-win-x64.exe` | Windows x64 | Standalone executable for Windows |
+| `forge_x.x.x_amd64.deb` | Debian/Ubuntu x64 | Debian package for apt-based systems |
+| `forge_x.x.x_arm64.deb` | Debian/Ubuntu ARM64 | Debian package for ARM systems |
+| `forge-x.x.x-macos-x64.pkg` | macOS Intel | macOS installer package |
+| `forge-x.x.x-macos-arm64.pkg` | macOS Apple Silicon | macOS installer package |
+| `forge.x.x.x.nupkg` | Windows | Chocolatey package |
+
+#### macOS
 
 ```bash
-# Install globally from Cloudsmith
-npm install -g --registry=https://npm.cloudsmith.io/ranjantestenv/forge/ forge
+# Option 1: Direct download (Apple Silicon)
+curl -L https://dl.cloudsmith.io/public/ranjantestenv/forge/raw/names/forge-macos-arm64/versions/latest/forge-macos-arm64 -o /usr/local/bin/forge
+chmod +x /usr/local/bin/forge
 
-# Or configure the registry permanently
-npm config set registry https://npm.cloudsmith.io/ranjantestenv/forge/
-npm install -g forge
+# Option 2: macOS Installer (.pkg)
+# Download forge-x.x.x-macos-arm64.pkg from GitHub Releases and double-click to install
+
+# Option 3: Homebrew (coming soon)
+# brew install forge
 ```
 
-#### Install from Source
+#### Linux
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd forge
+# Option 1: Debian/Ubuntu (.deb)
+curl -LO https://dl.cloudsmith.io/public/ranjantestenv/forge/deb/pool/any-distro/any-version/main/f/fo/forge_0.1.0_amd64.deb
+sudo dpkg -i forge_*.deb
 
-# Install dependencies
+# Option 2: Direct download
+curl -L https://dl.cloudsmith.io/public/ranjantestenv/forge/raw/names/forge-linux-x64/versions/latest/forge-linux-x64 -o ~/.local/bin/forge
+chmod +x ~/.local/bin/forge
+```
+
+#### Windows
+
+```powershell
+# Option 1: Chocolatey
+choco install forge --source="https://nuget.cloudsmith.io/ranjantestenv/forge/v2/"
+
+# Option 2: Direct download
+Invoke-WebRequest -Uri "https://dl.cloudsmith.io/public/ranjantestenv/forge/raw/names/forge-win-x64.exe/versions/latest/forge-win-x64.exe" -OutFile "$env:LOCALAPPDATA\forge.exe"
+```
+
+#### npm (requires Node.js)
+
+```bash
+npm install -g forge --registry=https://npm.cloudsmith.io/ranjantestenv/forge/
+```
+
+#### From Source
+
+```bash
+git clone https://github.com/DRYRunOnly/Forge.git
+cd Forge
 npm install
-
-# Build the project
 npm run build
+npm install -g .
 
 # Install globally (optional)
 npm install -g .
@@ -219,22 +263,9 @@ For detailed information, please read our [Contributing Guide](CONTRIBUTING.md).
 
 ## Hosting
 
-This project is hosted on [Cloudsmith](https://cloudsmith.com) as part of their Open Source hosting program.
-
 [![Hosted By: Cloudsmith](https://img.shields.io/badge/OSS%20hosting%20by-cloudsmith-blue?logo=cloudsmith&style=flat-square)](https://cloudsmith.com)
 
-Package repository: [https://broadcasts.cloudsmith.com/ranjantestenv/forge/](https://broadcasts.cloudsmith.com/ranjantestenv/forge/)
-
-### Installing from Cloudsmith
-
-```bash
-# Install from Cloudsmith registry
-npm install -g --registry=https://npm.cloudsmith.io/rajantestenv/forge/ forge
-
-# Or configure the registry for the scope
-npm config set @forge:registry https://npm.cloudsmith.io/ranjantestenv/forge/
-npm install -g @forge/forge
-```
+Package repository: [cloudsmith.io/~ranjantestenv/repos/forge](https://cloudsmith.io/~ranjantestenv/repos/forge/)
 
 ## License
 

@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Install build tools
+      run: |
+        brew install dpkg nuget
+
+    - name: Extract version from tag
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        npm version $VERSION --no-git-tag-version --allow-same-version
+
+    - name: Setup Cloudsmith CLI
+      uses: cloudsmith-io/cloudsmith-cli-action@v2
+      with:
+        oidc-namespace: ${{ secrets.CLOUDSMITH_ORG }}
+        oidc-service-slug: ${{ secrets.CLOUDSMITH_SERVICE_SLUG }}
+
+    - name: Build all packages
+      env:
+        CLOUDSMITH_ORG: ${{ secrets.CLOUDSMITH_ORG }}
+        CLOUDSMITH_REPO: ${{ secrets.CLOUDSMITH_REPO }}
+      run: npm run build:all
+
+    - name: Publish to Cloudsmith
+      env:
+        CLOUDSMITH_ORG: ${{ secrets.CLOUDSMITH_ORG }}
+        CLOUDSMITH_REPO: ${{ secrets.CLOUDSMITH_REPO }}
+      run: bash scripts/publish-cloudsmith.sh
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        name: "Forge v${{ env.VERSION }}"
+        generate_release_notes: true
+        files: |
+          dist/forge-macos-x64
+          dist/forge-macos-arm64
+          dist/forge-linux-x64
+          dist/forge-linux-arm64
+          dist/forge-win-x64.exe
+          dist/forge_${{ env.VERSION }}_amd64.deb
+          dist/forge_${{ env.VERSION }}_arm64.deb
+          dist/forge-${{ env.VERSION }}-macos-x64.pkg
+          dist/forge-${{ env.VERSION }}-macos-arm64.pkg
+          dist/forge.${{ env.VERSION }}.nupkg
