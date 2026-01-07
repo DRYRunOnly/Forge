@@ -89,7 +89,26 @@ export class NodePlugin implements PackagePlugin {
     const packageJsonPath = path.join(directory, 'package.json');
     
     if (!(await fs.pathExists(packageJsonPath))) {
-      throw new Error('package.json not found');
+      // Allow usage in directories without an existing package.json,
+      // for scenarios like `forge install lodash` in a fresh folder.
+      // We create a minimal in-memory manifest; Forge does not
+      // modify or create package.json itself.
+      this.logger.verbose('package.json not found, using synthetic manifest');
+
+      return {
+        name: path.basename(directory) || 'forge-project',
+        version: '1.0.0',
+        description: undefined,
+        dependencies: [],
+        devDependencies: [],
+        peerDependencies: [],
+        optionalDependencies: [],
+        scripts: {},
+        metadata: {
+          generatedBy: 'forge',
+          synthetic: true
+        }
+      };
     }
 
     const packageJson: NpmPackageJson = await fs.readJson(packageJsonPath);
@@ -308,7 +327,7 @@ export class NodePlugin implements PackagePlugin {
     graph: DependencyGraph,
     directory: string
   ): Promise<LockFile> {
-    const lockFilePath = path.join(directory, 'package-lock.json');
+    const lockFilePath = path.join(directory, 'forge-node-lock.json');
     
     const packages: Record<string, LockFileEntry> = {};
     
@@ -329,10 +348,10 @@ export class NodePlugin implements PackagePlugin {
     }
 
     const lockFile: LockFile = {
-      version: '2.0.0',
+      version: '3.0.0',
       packages,
       metadata: {
-        lockfileVersion: 2,
+        lockfileVersion: 3,
         requires: true
       }
     };
@@ -342,7 +361,7 @@ export class NodePlugin implements PackagePlugin {
   }
 
   async parseLockFile(directory: string): Promise<LockFile | null> {
-    const lockFilePath = path.join(directory, 'package-lock.json');
+    const lockFilePath = path.join(directory, 'forge-node-lock.json');
     
     if (!(await fs.pathExists(lockFilePath))) {
       return null;

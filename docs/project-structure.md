@@ -45,8 +45,8 @@ graph TD
     L --> N[Download packages from npm registry]
     M --> O[Install to virtual environment structure]
     N --> P[Extract & install to node_modules]
-    O --> Q[Create forge-lock.json]
-    P --> Q
+    O --> Q[Create Python lockfile (forge-lock.json)]
+    P --> Q[Create Node lockfile (forge-node-lock.json)]
     Q --> R[Success message]
 ```
 
@@ -66,7 +66,6 @@ forge/
 ├── .gitignore                      # Git ignore patterns
 ├── README.md                       # Project overview and usage guide
 ├── package.json                    # Node.js project configuration
-├── package-lock.json               # Locked dependency versions
 ├── tsconfig.json                   # TypeScript compiler configuration
 ├── jest.config.js                  # Jest testing framework configuration
 ├── .eslintrc.js                    # ESLint code quality rules
@@ -152,9 +151,12 @@ forge/
 - **DevDependencies**: Build tools (TypeScript, Jest, ESLint)
 - **Scripts**: Build, test, and development commands
 
-### `package-lock.json`
-**Purpose**: Locks exact versions of all dependencies for reproducible builds  
-**Contents**: Dependency tree with specific versions, integrity hashes, and resolution details
+### Lockfiles (`forge-node-lock.json`, `forge-lock.json`)
+**Purpose**: Persist resolved dependency trees for reproducible installs (managed by Forge at runtime, usually not committed to the repo).  
+**Details**:
+- **Node**: `forge-node-lock.json` records the dependency graph resolved by the Node plugin.
+- **Python**: `forge-lock.json` records the dependency graph resolved by the Python plugin.
+- **Note**: npm and pnpm still use their own native lockfiles (`package-lock.json`, `pnpm-lock.yaml`) when you run those tools directly.
 
 ### `tsconfig.json`
 **Purpose**: TypeScript compiler configuration  
@@ -1229,7 +1231,7 @@ Let's trace exactly what happens when you run `forge install axios --verbose`:
     - Create final directory (handle scoped packages)
     - Copy from temp to final location
     - Clean up temp directory
-24. **Lock file creation**: Generate `package-lock.json` with resolved versions
+24. **Lock file creation**: Generate Forge lockfiles (`forge-node-lock.json` for Node, `forge-lock.json` for Python) with resolved versions
 
 ### Phase 7: Result Reporting
 25. **Success message**: "Installation completed successfully!"
@@ -1389,7 +1391,7 @@ Our **npm plugin** is essentially a **complete reimplementation of npm** with th
 - Transitive dependencies: Resolves entire dependency tree
 - Circular dependency detection: Prevents infinite loops
 - Package installation: Proper node_modules structure
-- Lock file generation: Creates package-lock.json equivalent
+- Lock file generation: Creates a Forge-specific Node lockfile (`forge-node-lock.json`)
 - Scoped packages: Full support for @scope/package format
 
 **Beyond npm**:
@@ -1501,7 +1503,7 @@ The foundation is solid - now we can build support for Python, Java, and beyond!
   - Extract to `node_modules` with proper structure
   - Handle scoped packages (`@scope/package`)
   - Support for different dependency types
-- **Lock File Support**: Generate `package-lock.json` compatible files
+- **Lock File Support**: Generate `forge-node-lock.json` for Node installs
 
 **Internal Structure**:
 - **Interfaces**: `NpmPackageJson`, `NpmRegistryPackage` for npm-specific types
