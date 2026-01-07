@@ -230,6 +230,12 @@ Examples:
           result.errors.forEach(error => {
             console.error(chalk.red(`  ${error.package}: ${error.error}`));
           });
+        } else if (
+          result.installed.length === 0 &&
+          result.updated.length === 0 &&
+          result.removed.length === 0
+        ) {
+          console.log(chalk.green('Nothing to install, all packages already present.'));
         } else {
           console.log(chalk.green('Installation completed successfully!'));
         }

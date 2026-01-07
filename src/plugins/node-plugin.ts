@@ -265,6 +265,21 @@ export class NodePlugin implements PackagePlugin {
             this.logger.verbose(`Creating package directory: ${packageDir}`);
           }
 
+          // If the same version is already installed, skip re-installing
+          const existingPackageJson = path.join(packageDir, 'package.json');
+          if (await fs.pathExists(existingPackageJson)) {
+            try {
+              const existingInfo = await fs.readJson(existingPackageJson);
+              if (existingInfo.name === pkgInfo.name && existingInfo.version === pkgInfo.version) {
+                this.logger.verbose(`Skipping ${pkgInfo.name}@${pkgInfo.version} - already installed`);
+                await fs.remove(tempDir);
+                continue;
+              }
+            } catch {
+              // If we can't read/parse the existing package.json, fall through and overwrite.
+            }
+          }
+
           // Copy from temp to final location
           await fs.ensureDir(packageDir);
           await fs.copy(tempDir, packageDir);
@@ -273,6 +288,16 @@ export class NodePlugin implements PackagePlugin {
           await fs.remove(tempDir);
           
           this.logger.verbose(`Installed: ${pkgInfo.name}@${pkgInfo.version}`);
+
+          // Record installed package for reporting
+          const registry = this.getRegistry(context);
+          installed.push({
+            name: pkgInfo.name,
+            version: pkgInfo.version,
+            registry,
+            downloadUrl: '',
+            dependencies: []
+          });
         }
       } catch (error) {
         errors.push({

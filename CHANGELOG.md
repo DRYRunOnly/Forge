@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Established security reporting process
 - Added security best practices documentation
 
+## [0.1.2] - 2026-01-08
+
+### Fixed
+- Make repeated `forge install` runs idempotent for Node packages by skipping re-installation when the same package name and version are already present in `node_modules`.
+
 ## [0.1.1] - 2026-01-08
 
 ### Fixed
