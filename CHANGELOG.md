@@ -21,6 +21,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Established security reporting process
 - Added security best practices documentation
 
+## [0.2.0] - 2026-01-08
+
+### Added
+- Python plugin now properly extracts wheels (.whl) and source distributions (.tar.gz) instead of creating marker files
+- Python plugin reads actual package metadata from METADATA or PKG-INFO files
+- Python plugin dynamically detects Python version in venv (e.g., python3.9, python3.11)
+- Python plugin implements idempotent installs by checking for existing .dist-info directories
+- Python plugin resolves transitive dependencies with cycle detection
+- Smart dependency filtering for Python packages to skip dev/test/doc dependencies and optional extras
+- CLI shows "Nothing to install, all packages already present" when no packages need installation
+- Node plugin tracks installed packages in InstallResult for accurate reporting
+
+### Fixed
+- Python plugin now creates proper virtual environments using `python -m venv` instead of just directory structures
+- Virtual environment detection checks for existing venv before creating a new one
+- Proper error handling when Python 3 is not installed on the system
+
+### Changed
+- Renamed Python lockfile from `forge-lock.json` to `forge-python-lock.json` for consistency with Node's `forge-node-lock.json`
+
 ## [0.1.2] - 2026-01-08
 
 ### Fixed
@@ -53,7 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dry-run mode for safe operation testing
 - Comprehensive error handling and logging
 - Mixed project support (projects with multiple package formats)
-- Lock file generation (forge-lock.json)
+- Lock file generation (forge-node-lock.json, forge-python-lock.json)
 
 ### Project Structure
 - TypeScript-based architecture for type safety

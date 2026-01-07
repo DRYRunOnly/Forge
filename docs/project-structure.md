@@ -2,6 +2,41 @@
 
 This document provides a comprehensive knowledge transfer for the Forge project, explaining everything from tiny implementation details to the vast architecture - designed for developers who want to understand every aspect of this universal package manager.
 
+## 📝 Recent Updates (v0.2.0)
+
+### Python Plugin Enhancements
+- **Full Package Extraction**: Now properly extracts wheels (.whl) and source distributions (.tar.gz) instead of just creating marker files
+- **Metadata Reading**: Reads actual package name and version from METADATA or PKG-INFO files instead of parsing filenames
+- **Dynamic Python Version Detection**: Automatically detects Python version in venv (e.g., python3.9, python3.11) instead of hardcoded `python3.x`
+- **Proper venv Creation**: Creates real Python virtual environments using `python -m venv` instead of just directory structures
+- **Virtual Environment Detection**: Checks for existing venv (via `pyvenv.cfg` or `bin/python`) before creating a new one
+- **Fallback Handling**: Tries `python3` first, falls back to `python` if needed
+- **Clear Error Messages**: Provides helpful error when Python 3 is not installed
+- **Idempotent Installs**: Skip re-installation by checking for existing `.dist-info` directories
+- **Transitive Dependencies**: Now resolves full dependency trees with cycle detection
+- **Smart Dependency Filtering**: Filters out dev/test/doc dependencies and optional extras to prevent dependency spiral
+  - Skips `extra ==` markers (e.g., `pytest; extra == "testing"`)
+  - Skips namespace packages (e.g., `jaraco.test`, `flufl.flake8`)
+  - Skips packages with brackets (e.g., `coverage[toml]`)
+  - Only resolves production runtime dependencies
+
+### Node Plugin Enhancements
+- **Install Tracking**: Properly tracks which packages were actually installed vs skipped for accurate reporting
+
+### CLI Enhancements
+- **Smart Messages**: Shows "Nothing to install, all packages already present" when everything is already installed
+
+### Lockfile Consistency
+- **Node**: `forge-node-lock.json`
+- **Python**: `forge-python-lock.json` (renamed from `forge-lock.json`)
+
+## 📝 Previous Updates (v0.1.2)
+
+### Node Plugin
+- **Idempotent Installs**: Skip re-installation when the same package version already exists in `node_modules`
+
+---
+
 ## 🎯 Project Vision & What We Built
 
 **Forge** is a universal package manager that replaces all other package managers (npm, pip, maven, etc.) with a single, unified interface. Think of it as the "Swiss Army Knife" of package management.
@@ -45,7 +80,7 @@ graph TD
     L --> N[Download packages from npm registry]
     M --> O[Install to virtual environment structure]
     N --> P[Extract & install to node_modules]
-    O --> Q[Create Python lockfile (forge-lock.json)]
+    O --> Q[Create Python lockfile (forge-python-lock.json)]
     P --> Q[Create Node lockfile (forge-node-lock.json)]
     Q --> R[Success message]
 ```
@@ -151,11 +186,11 @@ forge/
 - **DevDependencies**: Build tools (TypeScript, Jest, ESLint)
 - **Scripts**: Build, test, and development commands
 
-### Lockfiles (`forge-node-lock.json`, `forge-lock.json`)
+### Lockfiles (`forge-node-lock.json`, `forge-python-lock.json`)
 **Purpose**: Persist resolved dependency trees for reproducible installs (managed by Forge at runtime, usually not committed to the repo).  
 **Details**:
 - **Node**: `forge-node-lock.json` records the dependency graph resolved by the Node plugin.
-- **Python**: `forge-lock.json` records the dependency graph resolved by the Python plugin.
+- **Python**: `forge-python-lock.json` records the dependency graph resolved by the Python plugin.
 - **Note**: npm and pnpm still use their own native lockfiles (`package-lock.json`, `pnpm-lock.yaml`) when you run those tools directly.
 
 ### `tsconfig.json`
@@ -201,7 +236,10 @@ forge/
 **Contents**:
 - **Commander.js setup**: Defines all CLI commands and options
 - **Command handlers**: 
-  - `install` - Package installation with dry-run support
+  - `install` - Package installation with dry-run support and smart result messaging
+    - Shows "Nothing to install, all packages already present" when everything is cached
+    - Shows "Installation completed successfully!" when packages are installed
+    - Shows errors if any packages failed
   - `remove` - Package removal
   - `search` - Package search across registries
   - `info` - Detailed package information
@@ -616,12 +654,13 @@ async downloadPackages(packages: ResolvedPackage[], context: CommandContext): Pr
 └── ...
 ```
 
-### 📁 Step 6: Package Installation
+### 📁 Step 6: Package Installation (with Idempotency)
 
 **The Installation Process**:
 ```typescript
 async installPackages(packagePaths: string[], manifest: PackageManifest, context: CommandContext): Promise<InstallResult> {
   const nodeModulesDir = path.join(context.cwd, 'node_modules');
+  const installed: ResolvedPackage[] = [];
   
   for (const packagePath of packagePaths) {
     // Create temp directory for extraction
@@ -648,12 +687,38 @@ async installPackages(packagePaths: string[], manifest: PackageManifest, context
       packageDir = path.join(nodeModulesDir, pkgInfo.name); // node_modules/lodash/
     }
     
+    // ⭐ IDEMPOTENCY CHECK: Skip if same version already installed
+    const existingPackageJson = path.join(packageDir, 'package.json');
+    if (await fs.pathExists(existingPackageJson)) {
+      try {
+        const existingInfo = await fs.readJson(existingPackageJson);
+        if (existingInfo.name === pkgInfo.name && existingInfo.version === pkgInfo.version) {
+          this.logger.verbose(`Skipping ${pkgInfo.name}@${pkgInfo.version} - already installed`);
+          await fs.remove(tempDir);
+          continue;  // Skip this package, it's already there
+        }
+      } catch {
+        // If we can't read existing package.json, overwrite it
+      }
+    }
+    
     // Copy from temp to final location
     await fs.copy(tempDir, packageDir);
     
     // Clean up temp directory
     await fs.remove(tempDir);
+    
+    // Track that we actually installed this package
+    installed.push({
+      name: pkgInfo.name,
+      version: pkgInfo.version,
+      registry: this.getRegistry(context),
+      downloadUrl: '',
+      dependencies: []
+    });
   }
+  
+  return { installed, updated: [], removed: [], errors: [] };
 }
 ```
 
@@ -826,26 +891,112 @@ private getBestDownloadUrl(packageInfo: PyPiPackageInfo, registry: string): stri
 }
 ```
 
-### 🏠 Step 6: Virtual Environment Installation
+### 🏠 Step 6: Virtual Environment Installation (with Proper Extraction)
 
 **Python-Specific Installation Structure**:
 ```typescript
 async installPackages(packagePaths: string[], manifest: PackageManifest, context: CommandContext): Promise<InstallResult> {
-  // Create virtual environment structure (not node_modules!)
-  const sitePackagesDir = path.join(context.cwd, 'venv', 'lib', 'python3.x', 'site-packages');
-  await fs.ensureDir(sitePackagesDir);
+  // Detect actual Python version from venv (not hardcoded!)
+  const sitePackagesDir = await this.getSitePackagesDir(context);
+  const installed: ResolvedPackage[] = [];
   
   for (const packagePath of packagePaths) {
-    const packageName = this.extractPackageNameFromFile(path.basename(packagePath));
-    const packageDir = path.join(sitePackagesDir, packageName);
+    const fileName = path.basename(packagePath);
+    const isWheel = fileName.endsWith('.whl');
+    const isTarGz = fileName.endsWith('.tar.gz');
     
-    // Create Python package structure
-    await fs.ensureDir(packageDir);
-    await fs.writeFile(
-      path.join(packageDir, '__init__.py'),
-      `# Installed by Forge\n# Original: ${path.basename(packagePath)}\n`
-    );
+    // Extract to temp directory
+    const tempDir = path.join(context.config.cache.directory, 'temp', `python-${Date.now()}`);
+    
+    if (isWheel) {
+      // Wheels are zip files
+      await extractZip(packagePath, { dir: tempDir });
+    } else {
+      // Source distributions are tar.gz
+      await tar.extract({ file: packagePath, cwd: tempDir, strip: 1 });
+    }
+    
+    // ⭐ Read actual metadata from package (not from filename!)
+    const metadata = await this.readPackageMetadata(tempDir);
+    const packageName = metadata.name;
+    const version = metadata.version;
+    
+    // ⭐ IDEMPOTENCY CHECK: Look for existing .dist-info
+    const distInfoPattern = `${packageName.replace(/-/g, '_')}-${version}.dist-info`;
+    const existingDistInfo = path.join(sitePackagesDir, distInfoPattern);
+    
+    if (await fs.pathExists(existingDistInfo)) {
+      this.logger.verbose(`Skipping ${packageName}@${version} - already installed`);
+      await fs.remove(tempDir);
+      continue;
+    }
+    
+    // Copy all package directories and files to site-packages
+    if (isWheel) {
+      const items = await fs.readdir(tempDir);
+      for (const item of items) {
+        const itemPath = path.join(tempDir, item);
+        const stat = await fs.stat(itemPath);
+        
+        if (stat.isDirectory()) {
+          const targetPath = path.join(sitePackagesDir, item);
+          await fs.copy(itemPath, targetPath, { overwrite: true });
+        }
+      }
+    } else {
+      // For source distributions, copy package directory
+      const packageDir = path.join(tempDir, packageName);
+      if (await fs.pathExists(packageDir)) {
+        const targetPath = path.join(sitePackagesDir, packageName);
+        await fs.copy(packageDir, targetPath, { overwrite: true });
+      }
+    }
+    
+    await fs.remove(tempDir);
+    installed.push({ name: packageName, version, registry: 'pypi', downloadUrl: '', dependencies: [] });
   }
+  
+  return { installed, updated: [], removed: [], errors: [] };
+}
+
+private async getSitePackagesDir(context: CommandContext): Promise<string> {
+  const venvPath = path.join(context.cwd, 'venv');
+  const pythonVersion = await this.detectPythonVersion(venvPath);
+  const sitePackagesDir = path.join(venvPath, 'lib', pythonVersion, 'site-packages');
+  await fs.ensureDir(sitePackagesDir);
+  return sitePackagesDir;
+}
+
+private async detectPythonVersion(venvPath: string): Promise<string> {
+  const libDir = path.join(venvPath, 'lib');
+  if (await fs.pathExists(libDir)) {
+    const items = await fs.readdir(libDir);
+    const pythonDir = items.find(item => item.startsWith('python'));
+    if (pythonDir) return pythonDir;  // e.g., 'python3.9', 'python3.11'
+  }
+  return 'python3';  // Fallback
+}
+
+private async readPackageMetadata(extractedDir: string): Promise<{ name: string; version: string }> {
+  // Look for .dist-info/METADATA (wheels) or PKG-INFO (source dists)
+  const items = await fs.readdir(extractedDir);
+  const distInfoDir = items.find(item => item.endsWith('.dist-info'));
+  
+  if (distInfoDir) {
+    const metadataPath = path.join(extractedDir, distInfoDir, 'METADATA');
+    if (await fs.pathExists(metadataPath)) {
+      const metadata = await fs.readFile(metadataPath, 'utf-8');
+      return this.parseMetadataFile(metadata);
+    }
+  }
+  
+  const pkgInfoPath = path.join(extractedDir, 'PKG-INFO');
+  if (await fs.pathExists(pkgInfoPath)) {
+    const metadata = await fs.readFile(pkgInfoPath, 'utf-8');
+    return this.parseMetadataFile(metadata);
+  }
+  
+  throw new Error('Could not find package metadata');
 }
 ```
 
@@ -1231,7 +1382,7 @@ Let's trace exactly what happens when you run `forge install axios --verbose`:
     - Create final directory (handle scoped packages)
     - Copy from temp to final location
     - Clean up temp directory
-24. **Lock file creation**: Generate Forge lockfiles (`forge-node-lock.json` for Node, `forge-lock.json` for Python) with resolved versions
+24. **Lock file creation**: Generate Forge lockfiles (`forge-node-lock.json` for Node, `forge-python-lock.json` for Python) with resolved versions
 
 ### Phase 7: Result Reporting
 25. **Success message**: "Installation completed successfully!"
@@ -1503,6 +1654,7 @@ The foundation is solid - now we can build support for Python, Java, and beyond!
   - Extract to `node_modules` with proper structure
   - Handle scoped packages (`@scope/package`)
   - Support for different dependency types
+  - **Idempotent installs**: Skip re-installation when same version already exists
 - **Lock File Support**: Generate `forge-node-lock.json` for Node installs
 
 **Internal Structure**:
@@ -1527,16 +1679,19 @@ The foundation is solid - now we can build support for Python, Java, and beyond!
   - Wheel and source distribution support
   - Authentication for private PyPI registries
 - **Dependency Resolution**:
-  - **Simplified Approach**: Direct dependencies only (no deep recursion)
-  - **Loop Prevention**: Avoids Python's complex circular dependency ecosystem
+  - **Recursive Resolution**: Full transitive dependency resolution with cycle detection
+  - **Smart Filtering**: Skips dev/test/doc dependencies and optional extras to prevent dependency spiral
+  - **Loop Prevention**: Cycle detection prevents infinite loops in Python's complex dependency graph
   - **Package Name Normalization**: Handles PyPI naming conventions
   - **Version Constraint Parsing**: Supports pip requirement specifiers
 - **Package Management**:
-  - Download wheels (.whl) and source distributions (.tar.gz)
+  - **Proper Extraction**: Full wheel (.whl) and source distribution (.tar.gz) extraction
+  - **Metadata Reading**: Reads actual package name/version from METADATA or PKG-INFO files
+  - **Dynamic Python Version Detection**: Detects actual Python version in venv (e.g., python3.9, python3.11)
+  - **Idempotent installs**: Skip re-installation when same version's .dist-info already exists
   - Virtual environment installation structure
   - Package caching in format-specific directories
-  - Proper Python package name handling
-- **Lock File Support**: Generate `forge-lock.json` for reproducible builds
+- **Lock File Support**: Generate `forge-python-lock.json` for reproducible builds
 
 **Internal Structure**:
 - **Interfaces**: `PyPiPackageInfo`, `PyPiRelease` for PyPI-specific types

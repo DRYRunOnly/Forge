@@ -17,6 +17,8 @@ import {
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import axios from 'axios';
+import * as tar from 'tar';
+import extractZip from 'extract-zip';
 import { getLogger } from '../utils/logger';
 
 interface PyPiPackageInfo {
@@ -169,29 +171,105 @@ export class PythonPlugin implements PackagePlugin {
       // Find best download URL (prefer wheel over source)
       const downloadUrl = this.getBestDownloadUrl(packageInfo, registry);
       
+      // Parse dependencies from requires_dist - only runtime dependencies
+      const dependencies: Dependency[] = [];
+      if (packageInfo.info.requires_dist) {
+        for (const reqDist of packageInfo.info.requires_dist) {
+          const parsed = this.parseRequiresDist(reqDist);
+          if (parsed) {
+            dependencies.push(parsed);
+          }
+        }
+      }
+      
       const resolvedPackage: ResolvedPackage = {
         name: packageInfo.info.name,
         version: packageInfo.info.version,
         registry,
         downloadUrl,
-        dependencies: [] // Don't resolve nested dependencies to avoid loops
+        dependencies
       };
       
       graph.nodes.set(fullKey, {
         package: resolvedPackage,
-        dependencies: [],
+        dependencies: dependencies.map(d => `${d.name}@${d.versionRange}`),
         dependents: []
       });
       
-      this.logger.verbose(`Resolved: ${resolvedPackage.name}@${resolvedPackage.version}`);
+      this.logger.verbose(`Resolved: ${resolvedPackage.name}@${resolvedPackage.version} with ${dependencies.length} dependencies`);
+      
+      // Recursively resolve dependencies
+      for (const childDep of dependencies) {
+        await this.resolveDirectDependency(childDep, graph, registry, context);
+      }
       
     } catch (error) {
       this.logger.verbose(`Error resolving ${dep.name}: ${error}`);
     }
   }
 
-// Removed complex recursive resolveDependency method to prevent infinite loops
-  // Python dependency resolution is now intentionally shallow to avoid circular dependency issues
+  private parseRequiresDist(reqDist: string): Dependency | null {
+    // Parse requirement strings like:
+    // "requests (>=2.20.0)"
+    // "certifi>=2017.4.17"
+    // "urllib3<3,>=1.21.1"
+    // "charset-normalizer~=2.0.0; python_version >= \"3\""
+    // "pytest>=7.0.0; extra == \"testing\"" - SKIP these (optional extras)
+    
+    // Check for environment markers
+    const parts = reqDist.split(';');
+    const packageSpec = parts[0].trim();
+    const markers = parts.slice(1).join(';').trim().toLowerCase();
+    
+    // Skip optional extras (dev, test, docs dependencies)
+    if (markers.includes('extra ==') || markers.includes('extra==')) {
+      return null;
+    }
+    
+    // Skip platform-specific dependencies we can't evaluate properly
+    // (In a real implementation, you'd evaluate these markers properly)
+    if (markers.includes('platform_') || markers.includes('sys_platform')) {
+      // For now, we'll skip platform-specific deps to avoid unnecessary packages
+      return null;
+    }
+    
+    // Extract package name and version spec
+    const match = packageSpec.match(/^([a-zA-Z0-9_-]+)\s*(.*)$/);
+    if (!match) {
+      return null;
+    }
+    
+    const name = match[1];
+    let versionSpec = match[2].trim();
+    
+    // Skip packages with dots that aren't real packages (like jaraco.test, flufl.flake8)
+    // These are namespace packages that should be installed differently
+    if (name.includes('.')) {
+      this.logger.verbose(`Skipping namespace/special package: ${name}`);
+      return null;
+    }
+    
+    // Remove parentheses if present
+    versionSpec = versionSpec.replace(/[()]/g, '').trim();
+    
+    // Remove brackets for extras (e.g., "coverage[toml]" -> "coverage")
+    if (packageSpec.includes('[')) {
+      // Skip packages with extras for now to avoid dev/test dependencies
+      this.logger.verbose(`Skipping package with extras: ${packageSpec}`);
+      return null;
+    }
+    
+    // Convert to a simpler format (just take the first constraint for now)
+    if (!versionSpec) {
+      versionSpec = '*';
+    }
+    
+    return {
+      name,
+      versionRange: versionSpec,
+      scope: 'production'
+    };
+  }
 
   private async fetchPackageInfo(
     name: string,
@@ -391,37 +469,102 @@ export class PythonPlugin implements PackagePlugin {
     manifest: PackageManifest,
     context: CommandContext
   ): Promise<InstallResult> {
-    const sitePackagesDir = path.join(context.cwd, 'venv', 'lib', 'python3.x', 'site-packages');
-    await fs.ensureDir(sitePackagesDir);
+    const sitePackagesDir = await this.getSitePackagesDir(context);
     
     const installed: ResolvedPackage[] = [];
     const errors: InstallError[] = [];
     
     for (const packagePath of packagePaths) {
       try {
-        this.logger.verbose(`Installing package: ${packagePath}`);
-        
         const fileName = path.basename(packagePath);
-        const packageName = this.extractPackageNameFromFile(fileName);
-        const packageDir = path.join(sitePackagesDir, packageName);
-        await fs.ensureDir(packageDir);
+        const isWheel = fileName.endsWith('.whl');
+        const isTarGz = fileName.endsWith('.tar.gz');
         
-        // Create a simple marker file
-        await fs.writeFile(
-          path.join(packageDir, '__init__.py'),
-          `# Installed by Forge\n# Original: ${fileName}\n`
-        );
+        if (!isWheel && !isTarGz) {
+          throw new Error(`Unsupported package format: ${fileName}`);
+        }
         
-        // Create a basic ResolvedPackage for the installed package
-        const resolvedPkg: ResolvedPackage = {
-          name: packageName,
-          version: '1.0.0',
-          registry: 'pypi',
-          downloadUrl: '',
-          dependencies: []
-        };
-        installed.push(resolvedPkg);
-        this.logger.verbose(`Installed: ${packageName}`);
+        // Extract to temp directory first
+        const tempDir = path.join(context.config.cache.directory, 'temp', `python-${Date.now()}`);
+        await fs.ensureDir(tempDir);
+        
+        this.logger.verbose(`Extracting package: ${packagePath}`);
+        
+        try {
+          if (isWheel) {
+            // Wheels are zip files
+            await extractZip(packagePath, { dir: tempDir });
+          } else {
+            // Source distributions are tar.gz
+            await tar.extract({
+              file: packagePath,
+              cwd: tempDir,
+              strip: 1
+            });
+          }
+          
+          // Read metadata to get actual package name and version
+          const metadata = await this.readPackageMetadata(tempDir);
+          const packageName = metadata.name;
+          const version = metadata.version;
+          
+          this.logger.verbose(`Installing ${packageName}@${version}`);
+          
+          // Check if the same version is already installed by looking for .dist-info directory
+          const distInfoPattern = `${packageName.replace(/-/g, '_')}-${version}.dist-info`;
+          const existingDistInfo = path.join(sitePackagesDir, distInfoPattern);
+          
+          if (await fs.pathExists(existingDistInfo)) {
+            this.logger.verbose(`Skipping ${packageName}@${version} - already installed`);
+            await fs.remove(tempDir);
+            continue;
+          }
+          
+          // Install package files to site-packages
+          if (isWheel) {
+            // Copy all .dist-info and package directories from wheel
+            const items = await fs.readdir(tempDir);
+            for (const item of items) {
+              const itemPath = path.join(tempDir, item);
+              const stat = await fs.stat(itemPath);
+              
+              if (stat.isDirectory()) {
+                const targetPath = path.join(sitePackagesDir, item);
+                await fs.copy(itemPath, targetPath, { overwrite: true });
+                this.logger.verbose(`Copied ${item} to site-packages`);
+              } else if (stat.isFile() && !item.endsWith('.pyc')) {
+                // Copy top-level .py files
+                const targetPath = path.join(sitePackagesDir, item);
+                await fs.copy(itemPath, targetPath, { overwrite: true });
+              }
+            }
+          } else {
+            // For source distributions, look for the package directory
+            const packageDir = path.join(tempDir, packageName);
+            if (await fs.pathExists(packageDir)) {
+              const targetPath = path.join(sitePackagesDir, packageName);
+              await fs.copy(packageDir, targetPath, { overwrite: true });
+              this.logger.verbose(`Copied ${packageName} to site-packages`);
+            }
+          }
+          
+          // Clean up temp directory
+          await fs.remove(tempDir);
+          
+          // Create a basic ResolvedPackage for the installed package
+          const resolvedPkg: ResolvedPackage = {
+            name: packageName,
+            version,
+            registry: 'pypi',
+            downloadUrl: '',
+            dependencies: []
+          };
+          installed.push(resolvedPkg);
+          this.logger.verbose(`Installed: ${packageName}@${version}`);
+        } catch (extractError) {
+          await fs.remove(tempDir).catch(() => {});
+          throw extractError;
+        }
       } catch (error) {
         const installError: InstallError = {
           package: this.extractPackageNameFromFile(path.basename(packagePath)),
@@ -441,13 +584,139 @@ export class PythonPlugin implements PackagePlugin {
     };
   }
 
+  private async readPackageMetadata(extractedDir: string): Promise<{ name: string; version: string }> {
+    // Look for .dist-info directory (wheels) or PKG-INFO (source dists)
+    const items = await fs.readdir(extractedDir);
+    
+    // Try .dist-info first (wheel format)
+    const distInfoDir = items.find(item => item.endsWith('.dist-info'));
+    if (distInfoDir) {
+      const metadataPath = path.join(extractedDir, distInfoDir, 'METADATA');
+      if (await fs.pathExists(metadataPath)) {
+        const metadata = await fs.readFile(metadataPath, 'utf-8');
+        return this.parseMetadataFile(metadata);
+      }
+    }
+    
+    // Try PKG-INFO (source distribution format)
+    const pkgInfoPath = path.join(extractedDir, 'PKG-INFO');
+    if (await fs.pathExists(pkgInfoPath)) {
+      const metadata = await fs.readFile(pkgInfoPath, 'utf-8');
+      return this.parseMetadataFile(metadata);
+    }
+    
+    // Fallback: extract from directory name or first .dist-info found
+    if (distInfoDir) {
+      const match = distInfoDir.match(/^(.+)-([0-9.]+)\.dist-info$/);
+      if (match) {
+        return { name: match[1].replace(/_/g, '-'), version: match[2] };
+      }
+    }
+    
+    throw new Error('Could not find package metadata (METADATA or PKG-INFO)');
+  }
+
+  private parseMetadataFile(content: string): { name: string; version: string } {
+    const lines = content.split('\n');
+    let name = '';
+    let version = '';
+    
+    for (const line of lines) {
+      if (line.startsWith('Name: ')) {
+        name = line.substring(6).trim();
+      } else if (line.startsWith('Version: ')) {
+        version = line.substring(9).trim();
+      }
+      
+      if (name && version) {
+        break;
+      }
+    }
+    
+    if (!name || !version) {
+      throw new Error('Could not parse package name and version from metadata');
+    }
+    
+    return { name, version };
+  }
+
+  private async detectPythonVersion(venvPath: string): Promise<string> {
+    // Try to detect Python version from venv/lib directory structure
+    const libDir = path.join(venvPath, 'lib');
+    
+    if (await fs.pathExists(libDir)) {
+      const items = await fs.readdir(libDir);
+      const pythonDir = items.find(item => item.startsWith('python'));
+      
+      if (pythonDir) {
+        this.logger.verbose(`Detected Python version directory: ${pythonDir}`);
+        return pythonDir;
+      }
+    }
+    
+    // Fallback to python3 if we can't detect
+    this.logger.warn('Could not detect Python version, using python3 as fallback');
+    return 'python3';
+  }
+
+  private async ensureVirtualEnvironment(context: CommandContext): Promise<void> {
+    const venvPath = path.join(context.cwd, 'venv');
+    
+    // Check if venv already exists (look for pyvenv.cfg or bin/python)
+    const pyvenvCfg = path.join(venvPath, 'pyvenv.cfg');
+    const binPython = path.join(venvPath, 'bin', 'python');
+    const binPython3 = path.join(venvPath, 'bin', 'python3');
+    
+    if (await fs.pathExists(pyvenvCfg) || await fs.pathExists(binPython) || await fs.pathExists(binPython3)) {
+      this.logger.verbose('Virtual environment already exists, using existing venv');
+      return;
+    }
+    
+    this.logger.info('Creating Python virtual environment...');
+    
+    // Create venv using Python's venv module
+    const { spawnSync } = await import('child_process');
+    
+    // Try python3 first, then python
+    let result = spawnSync('python3', ['-m', 'venv', venvPath], {
+      cwd: context.cwd,
+      stdio: context.verbose ? 'inherit' : 'pipe'
+    });
+    
+    if (result.error || result.status !== 0) {
+      // Try 'python' if python3 fails
+      result = spawnSync('python', ['-m', 'venv', venvPath], {
+        cwd: context.cwd,
+        stdio: context.verbose ? 'inherit' : 'pipe'
+      });
+      
+      if (result.error || result.status !== 0) {
+        throw new Error('Failed to create virtual environment. Make sure Python 3 is installed.');
+      }
+    }
+    
+    this.logger.info('Virtual environment created successfully');
+  }
+
+  private async getSitePackagesDir(context: CommandContext): Promise<string> {
+    const venvPath = path.join(context.cwd, 'venv');
+    
+    // Ensure venv exists before trying to use it
+    await this.ensureVirtualEnvironment(context);
+    
+    const pythonVersion = await this.detectPythonVersion(venvPath);
+    const sitePackagesDir = path.join(venvPath, 'lib', pythonVersion, 'site-packages');
+    await fs.ensureDir(sitePackagesDir);
+    return sitePackagesDir;
+  }
+
   async removePackages(packageNames: string[], context: CommandContext): Promise<InstallResult> {
     const removed: string[] = [];
     const errors: InstallError[] = [];
+    const sitePackagesDir = await this.getSitePackagesDir(context);
     
     for (const name of packageNames) {
       try {
-        const sitePackagesDir = path.join(context.cwd, 'venv', 'lib', 'python3.x', 'site-packages');
         const packageDir = path.join(sitePackagesDir, name);
         
         if (await fs.pathExists(packageDir)) {
@@ -503,7 +772,7 @@ export class PythonPlugin implements PackagePlugin {
       lockFile.packages![pkg.name] = entry;
     }
     
-    const lockFilePath = path.join(directory, 'forge-lock.json');
+    const lockFilePath = path.join(directory, 'forge-python-lock.json');
     await fs.writeJson(lockFilePath, lockFile, { spaces: 2 });
     this.logger.verbose(`Created lock file: ${lockFilePath}`);
     
@@ -512,7 +781,7 @@ export class PythonPlugin implements PackagePlugin {
 
   async parseLockFile(directory: string): Promise<LockFile | null> {
     try {
-      const lockFilePath = path.join(directory, 'forge-lock.json');
+      const lockFilePath = path.join(directory, 'forge-python-lock.json');
       
       if (!(await fs.pathExists(lockFilePath))) {
         return null;
