@@ -168,6 +168,21 @@ npm install
 npm run build
 npm install -g .
 
+### Using Forge in a new directory (no package.json)
+
+Forge can be used in a completely fresh directory, similar to npm:
+
+```bash
+mkdir my-app && cd my-app
+forge install lodash
+```
+
+- If there is **no** `package.json` or other manifest, Forge will:
+    - Default to the Node plugin (by pluginPriority) when you specify packages.
+    - Create `node_modules/` and install the requested packages.
+    - Generate a Forge-managed `forge-node-lock.json` (Forge-specific schema, not npm's).
+- Forge does **not** create or modify `package.json` for you; manifests remain under your control.
+
 # Install globally (optional)
 npm install -g .
 

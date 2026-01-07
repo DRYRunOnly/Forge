@@ -74,7 +74,20 @@ export class ForgeCore {
         // Auto-detect project type
         plugin = await this.pluginManager.getPluginForDirectory(context.cwd);
         if (!plugin) {
-          throw new Error('No plugin found for this directory. Supported formats: node, python, maven. Use --format to specify explicitly.');
+          // If no plugin is detected but explicit packages were requested,
+          // fall back to the first plugin in the configured priority list
+          // (by default: node). This allows commands like
+          // `forge install lodash` in an empty directory, similar to npm.
+          if (options.packages && options.packages.length > 0) {
+            const defaultFormat = this.config.pluginPriority[0];
+            if (defaultFormat) {
+              plugin = this.pluginManager.getPluginByFormat(defaultFormat);
+            }
+          }
+
+          if (!plugin) {
+            throw new Error('No plugin found for this directory. Supported formats: node, python, maven. Use --format to specify explicitly.');
+          }
         }
         this.logger.info(`Using ${plugin.name}`);
       }

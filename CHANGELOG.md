@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Established security reporting process
 - Added security best practices documentation
 
+## [0.1.1] - 2026-01-08
+
+### Fixed
+- Allow `forge install <pkg>` to work in directories without an existing `package.json` by falling back to the Node plugin and using a synthetic manifest.
+- Write Forge-managed Node lockfiles to `forge-node-lock.json` instead of `package-lock.json` to avoid conflicts with npm's own lockfile format.
+- Confirmed that Node can require packages installed by Forge from the generated `node_modules` layout.
+
 ## [0.1.0] - 2025-12-23
 
 ### Added
