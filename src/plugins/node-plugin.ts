@@ -47,6 +47,7 @@ interface NpmRegistryPackage {
       version: string;
       description?: string;
       main?: string;
+      deprecated?: string;
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
       peerDependencies?: Record<string, string>;
@@ -554,15 +555,67 @@ export class NodePlugin implements PackagePlugin {
       });
       const pkg = response.data;
 
-      // Find the best matching version
-      const availableVersions = Object.keys(pkg.versions);
-      const matchingVersion = semver.maxSatisfying(availableVersions, versionRange);
+      // For "*" or "latest", use dist-tags.latest but avoid deprecated versions
+      let matchingVersion: string | null;
+      
+      if (versionRange === '*' || versionRange === 'latest') {
+        matchingVersion = pkg['dist-tags'].latest;
+        
+        // Check if the latest version is deprecated
+        const latestVersionInfo = matchingVersion ? pkg.versions[matchingVersion] : null;
+        this.logger.verbose(`Checking latest version ${matchingVersion}: deprecated=${!!latestVersionInfo?.deprecated}`);
+        
+        // Also check for suspicious version numbers like 99.99.99 which are often deprecation markers
+        const isSuspiciousVersion = matchingVersion && /^99\./.test(matchingVersion);
+        
+        if (matchingVersion && (latestVersionInfo?.deprecated || isSuspiciousVersion)) {
+          if (isSuspiciousVersion) {
+            this.logger.verbose(`dist-tags.latest (${matchingVersion}) looks like a deprecation marker, finding alternate version`);
+          } else {
+            this.logger.verbose(`dist-tags.latest (${matchingVersion}) is deprecated, finding non-deprecated version`);
+          }
+          
+          // Find the highest non-deprecated, non-suspicious version
+          const availableVersions = Object.keys(pkg.versions);
+          const goodVersions = availableVersions.filter(v => {
+            const isSuspicious = /^99\./.test(v);
+            return !pkg.versions[v].deprecated && !isSuspicious;
+          });
+          
+          if (goodVersions.length > 0) {
+            matchingVersion = semver.maxSatisfying(goodVersions, '*');
+            this.logger.verbose(`Using alternate version: ${matchingVersion}`);
+            
+            // Warn about the suspicious/deprecated version
+            if (latestVersionInfo?.deprecated) {
+              this.logger.warn(`Package ${name}: latest version is deprecated - ${latestVersionInfo.deprecated}`);
+            } else if (isSuspiciousVersion) {
+              this.logger.warn(`Package ${name}: latest version (99.x.x) appears to be a deprecation marker, using ${matchingVersion} instead`);
+            }
+          } else {
+            this.logger.warn(`All versions are deprecated or suspicious, using ${matchingVersion}`);
+          }
+        } else {
+          this.logger.verbose(`Using dist-tags.latest: ${matchingVersion} for ${name}@${versionRange}`);
+        }
+      } else {
+        // For specific version ranges, find the best matching version
+        const availableVersions = Object.keys(pkg.versions);
+        matchingVersion = semver.maxSatisfying(availableVersions, versionRange);
+      }
 
       if (!matchingVersion) {
         throw new Error(`No version of ${name} satisfies ${versionRange}`);
       }
 
-      return pkg.versions[matchingVersion];
+      const versionInfo = pkg.versions[matchingVersion];
+      
+      // Check for deprecation warning
+      if (versionInfo.deprecated) {
+        this.logger.warn(`Package ${name}@${matchingVersion} is deprecated: ${versionInfo.deprecated}`);
+      }
+
+      return versionInfo;
     } catch (error) {
       this.logger.error(`Failed to get version info for ${name}@${versionRange}:`, error);
       return null;

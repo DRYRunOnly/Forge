@@ -21,6 +21,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Established security reporting process
 - Added security best practices documentation
 
+## [0.2.1] - 2026-01-08
+
+### Fixed
+- CLI now reads version dynamically from package.json instead of hardcoded value
+- Python venv creation on Ubuntu containers (fixed "Invalid host defined options" error)
+  - Changed stdio handling to use 'pipe' with 'utf-8' encoding for better compatibility
+  - Added proper stderr capture for better error messages
+- Node plugin now detects and avoids deprecated packages with suspicious version numbers (99.x.x)
+  - Automatically selects non-deprecated alternatives when available
+  - Shows warnings for deprecated or suspicious versions
+
 ## [0.2.0] - 2026-01-08
 
 ### Added
