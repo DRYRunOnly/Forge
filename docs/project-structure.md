@@ -2,7 +2,20 @@
 
 This document provides a comprehensive knowledge transfer for the Forge project, explaining everything from tiny implementation details to the vast architecture - designed for developers who want to understand every aspect of this universal package manager.
 
-## 📝 Recent Updates (v0.2.0)
+## 📝 Recent Updates (v0.2.1)
+
+### Bug Fixes
+- **CLI Version Display**: Now reads version dynamically from package.json instead of hardcoded value (fixes `forge --version`)
+- **Python Venv Creation (Ubuntu)**: Fixed "Invalid host defined options" error in containers
+  - Changed stdio handling from conditional to always use `'pipe'` with `'utf-8'` encoding
+  - Added proper stderr capture and error reporting
+- **Deprecated Package Detection**: Node plugin now intelligently handles deprecated packages
+  - Detects suspicious version numbers (99.x.x) used as deprecation markers
+  - Automatically finds and uses non-deprecated alternatives when requesting `*` or `latest`
+  - Shows warnings when deprecated or suspicious versions are encountered
+  - Falls back gracefully when only deprecated versions exist
+
+## 📝 Previous Updates (v0.2.0)
 
 ### Python Plugin Enhancements
 - **Full Package Extraction**: Now properly extracts wheels (.whl) and source distributions (.tar.gz) instead of just creating marker files
