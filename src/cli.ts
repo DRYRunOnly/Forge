@@ -5,8 +5,7 @@ import { ForgeCore } from './core/forge-core';
 import { loadConfig } from './utils/config';
 import { setupLogger } from './utils/logger';
 import chalk from 'chalk';
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import { VERSION } from './version';
 
 const program = new Command();
 
@@ -15,13 +14,10 @@ async function main() {
   // We'll set up verbose logging later based on CLI args
   const forge = new ForgeCore(config);
 
-  // Read version from package.json
-  const packageJson = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
-
   program
     .name('forge')
     .description('Forge - A universal package manager that forges packages across ecosystems')
-    .version(packageJson.version);
+    .version(VERSION);
 
   // Cache command
   program

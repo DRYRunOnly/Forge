@@ -7,8 +7,9 @@
     "forge": "dist/cli.js"
   },
   "scripts": {
-    "build": "tsc && chmod +x dist/cli.js",
-    "build:prod": "npm run clean && tsc --sourceMap false && chmod +x dist/cli.js",
+    "generate-version": "node scripts/generate-version.js",
+    "build": "npm run generate-version && tsc && chmod +x dist/cli.js",
+    "build:prod": "npm run clean && npm run generate-version && tsc --sourceMap false && chmod +x dist/cli.js",
     "dev": "ts-node src/cli.ts",
     "test": "jest",
     "test:watch": "jest --watch",
