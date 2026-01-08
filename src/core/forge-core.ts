@@ -384,7 +384,7 @@ export class ForgeCore {
         
         registries[registryName] = {
           url: registry,
-          scope: 'npm'
+          scope: 'node'
         };
       }
       
@@ -442,7 +442,7 @@ export class ForgeCore {
         return Object.entries(registries).map(([key, config]: [string, any]) => ({
           name: key,
           url: typeof config === 'string' ? config : config.url,
-          scope: typeof config === 'object' ? config.scope || 'npm' : 'npm',
+          scope: typeof config === 'object' ? config.scope || 'node' : 'node',
           authenticated: typeof config === 'object' && config.token ? '✓' : '✗'
         }));
         
@@ -453,7 +453,7 @@ export class ForgeCore {
         
         registries[options.name] = {
           url: options.url,
-          scope: options.scope || 'npm',
+          scope: options.scope || 'node',
           ...(options.token && { token: options.token })
         };
         
@@ -485,7 +485,7 @@ export class ForgeCore {
         }
         
         const registryConfig = registries[options.name];
-        const scope = registryConfig.scope || 'npm';
+        const scope = registryConfig.scope || 'node';
         
         // Update the default registry for this scope
         await this.setConfig(`defaultRegistry.${scope}`, options.name);
@@ -671,17 +671,17 @@ export class ForgeCore {
   }
 
   /**
-   * Get the default npm registry configuration
+   * Get the default Node registry configuration
    */
   private getDefaultNpmRegistry(): { url: string; token?: string } {
     const registries = (this.config as any).registries || {};
-    const defaultNpmName = (this.config as any).defaultRegistry?.npm || 'npm';
-    const npmRegistry = registries[defaultNpmName];
-    
-    if (npmRegistry && typeof npmRegistry === 'object') {
+    const defaultNodeName = (this.config as any).defaultRegistry?.node || 'node';
+    const nodeRegistry = registries[defaultNodeName];
+
+    if (nodeRegistry && typeof nodeRegistry === 'object') {
       return {
-        url: npmRegistry.url,
-        token: npmRegistry.token
+        url: nodeRegistry.url,
+        token: nodeRegistry.token
       };
     }
     

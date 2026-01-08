@@ -34,6 +34,9 @@ jobs:
         echo "VERSION=$VERSION" >> $GITHUB_ENV
         npm version $VERSION --no-git-tag-version --allow-same-version
 
+    - name: Generate CLI version file
+      run: npm run generate-version
+
     - name: Setup Cloudsmith CLI
       uses: cloudsmith-io/cloudsmith-cli-action@v2
       with:

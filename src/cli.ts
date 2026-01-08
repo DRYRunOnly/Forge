@@ -6,6 +6,7 @@ import { loadConfig } from './utils/config';
 import { setupLogger } from './utils/logger';
 import chalk from 'chalk';
 import { VERSION } from './version';
+import * as readline from 'readline';
 
 const program = new Command();
 
@@ -325,11 +326,41 @@ Examples:
     .option('--token <token>', 'Authentication token')
     .action(async (action: string, name?: string, url?: string, options?: any) => {
       try {
+        let scope = options?.scope as string | undefined;
+
+        // If adding a registry without explicit scope, interactively ask for it when possible.
+        if (action === 'add' && !scope) {
+          if (process.stdin.isTTY && process.stdout.isTTY) {
+            scope = await new Promise<string | undefined>((resolve) => {
+              const rl = readline.createInterface({
+                input: process.stdin,
+                output: process.stdout
+              });
+
+              rl.question('Registry scope [node/python/maven] (default: node): ', (answer) => {
+                rl.close();
+                const value = answer.trim().toLowerCase();
+                if (!value) {
+                  return resolve('node');
+                }
+                if (['node', 'python', 'maven'].includes(value)) {
+                  return resolve(value);
+                }
+                console.log(chalk.yellow('Invalid scope, falling back to "node".'));
+                return resolve('node');
+              });
+            });
+          } else {
+            // Non-interactive environment: fall back to node
+            scope = 'node';
+          }
+        }
+
         const result = await forge.manageRegistry(action, {
           name,
           url,
           token: options?.token,
-          scope: options?.scope
+          scope
         });
         
         if (action === 'list') {

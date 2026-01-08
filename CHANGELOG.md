@@ -21,6 +21,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Established security reporting process
 - Added security best practices documentation
 
+## [0.2.2] - 2026-01-09
+
+### Fixed
+- Python virtual environments issue
+
+### Changed
+- Registry management UX improvements
+  - `forge registry add` now prompts for a registry scope when `--scope` is not provided (with `node` as the default)
+  - Default scopes and configuration keys now consistently use `node` instead of `npm` for the Node ecosystem
+  - Node plugin now reads `defaultRegistry.node` and the corresponding `registries` entry instead of legacy `npm` keys
+
 ## [0.2.1] - 2026-01-08
 
 ### Fixed
@@ -28,9 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Python venv creation on Ubuntu containers (fixed "Invalid host defined options" error)
   - Changed stdio handling to use 'pipe' with 'utf-8' encoding for better compatibility
   - Added proper stderr capture for better error messages
-- Node plugin now detects and avoids deprecated packages with suspicious version numbers (99.x.x)
-  - Automatically selects non-deprecated alternatives when available
-  - Shows warnings for deprecated or suspicious versions
+- Node plugin now surfaces deprecation metadata from the registry
+  - Logs clear warnings when installing deprecated versions (e.g. django@99.99.99)
+  - Keeps version resolution aligned with npm (still respects semver and registry tags)
 
 ## [0.2.0] - 2026-01-08
 

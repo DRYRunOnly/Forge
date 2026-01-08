@@ -9,11 +9,9 @@ This document provides a comprehensive knowledge transfer for the Forge project,
 - **Python Venv Creation (Ubuntu)**: Fixed "Invalid host defined options" error in containers
   - Changed stdio handling from conditional to always use `'pipe'` with `'utf-8'` encoding
   - Added proper stderr capture and error reporting
-- **Deprecated Package Detection**: Node plugin now intelligently handles deprecated packages
-  - Detects suspicious version numbers (99.x.x) used as deprecation markers
-  - Automatically finds and uses non-deprecated alternatives when requesting `*` or `latest`
-  - Shows warnings when deprecated or suspicious versions are encountered
-  - Falls back gracefully when only deprecated versions exist
+- **Deprecated Package Handling**: Node plugin now surfaces deprecation metadata from the registry
+  - Logs clear warnings when installing deprecated versions (for example `django@99.99.99`)
+  - Keeps version resolution behavior aligned with npm (uses semver and registry tags as-is)
 
 ## 📝 Previous Updates (v0.2.0)
 

@@ -678,28 +678,25 @@ export class PythonPlugin implements PackagePlugin {
     const { spawnSync } = await import('child_process');
     
     // Try python3 first, then python
+    // Note: Do not use 'inherit' for stdio as it causes issues in containers
     let result = spawnSync('python3', ['-m', 'venv', venvPath], {
-      cwd: context.cwd,
-      stdio: 'pipe',
-      encoding: 'utf-8'
+      cwd: context.cwd
     });
     
     if (result.error || result.status !== 0) {
       // Try 'python' if python3 fails
       result = spawnSync('python', ['-m', 'venv', venvPath], {
-        cwd: context.cwd,
-        stdio: 'pipe',
-        encoding: 'utf-8'
+        cwd: context.cwd
       });
       
       if (result.error || result.status !== 0) {
-        const errorMsg = result.stderr || result.error?.message || 'Unknown error';
+        const errorMsg = result.stderr?.toString() || result.error?.message || 'Unknown error';
         throw new Error(`Failed to create virtual environment: ${errorMsg}. Make sure Python 3 is installed.`);
       }
     }
     
     if (context.verbose && result.stdout) {
-      this.logger.verbose(result.stdout);
+      this.logger.verbose(result.stdout.toString());
     }
     
     this.logger.info('Virtual environment created successfully');
